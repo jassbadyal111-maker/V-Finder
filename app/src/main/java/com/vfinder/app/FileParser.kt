@@ -1,7 +1,9 @@
 package com.vfinder.app
 
-import org.json.JSONArray
-import org.json.JSONObject
+import com.google.gson.JsonArray
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
@@ -17,7 +19,8 @@ internal fun parseText(text: String, fileName: String, query: String): List<Pers
     val normalized = query.trim().lowercase(Locale.getDefault())
     if (normalized.isBlank() || text.isBlank()) return emptyList()
 
-    if (fileName.substringAfterLast('.', "").equals("json", true) || text.trimStart().startsWith("{") || text.trimStart().startsWith("[")) {
+    val trimmed = text.trimStart()
+    if (fileName.substringAfterLast('.', "").equals("json", true) || trimmed.startsWith("{") || trimmed.startsWith("[")) {
         return parseJson(text, normalized)
     }
 
@@ -43,22 +46,20 @@ internal fun parseText(text: String, fileName: String, query: String): List<Pers
 }
 
 private fun parseJson(text: String, normalized: String): List<PersonRecord> {
-    val root = text.trimStart()
     return try {
+        val root = JsonParser.parseString(text)
         when {
-            root.startsWith("[") -> {
-                val array = JSONArray(text)
-                (0 until array.length()).mapNotNull { index -> jsonValueToRecord(array.get(index), normalized) }
-            }
-            root.startsWith("{") -> {
-                val objectRoot = JSONObject(text)
-                val data = objectRoot.opt("data")
-                if (data is JSONArray) {
-                    (0 until data.length()).mapNotNull { index -> jsonValueToRecord(data.get(index), normalized) }
+            root.isJsonArray -> parseJsonArray(root.asJsonArray, normalized)
+            root.isJsonObject -> {
+                val rootObject = root.asJsonObject
+                val data = rootObject.get("data")
+                if (data != null && data.isJsonArray) {
+                    parseJsonArray(data.asJsonArray, normalized)
                 } else {
-                    jsonValueToRecord(objectRoot, normalized)?.let(::listOf).orEmpty()
+                    jsonObjectToRecord(rootObject, normalized)?.let(::listOf).orEmpty()
                 }
             }
+            root.isJsonPrimitive -> jsonPrimitiveToRecord(root, normalized)?.let(::listOf).orEmpty()
             else -> emptyList()
         }
     } catch (error: Exception) {
@@ -66,24 +67,35 @@ private fun parseJson(text: String, normalized: String): List<PersonRecord> {
     }
 }
 
-private fun jsonValueToRecord(value: Any, normalized: String): PersonRecord? {
-    if (value !is JSONObject) {
-        val text = value.toString()
-        return if (text.contains(normalized, ignoreCase = true)) PersonRecord(mapOf("data" to text)) else null
-    }
+private fun parseJsonArray(array: JsonArray, normalized: String): List<PersonRecord> =
+    array.mapNotNull { value -> jsonElementToRecord(value, normalized) }
 
+private fun jsonElementToRecord(value: JsonElement, normalized: String): PersonRecord? = when {
+    value.isJsonObject -> jsonObjectToRecord(value.asJsonObject, normalized)
+    value.isJsonArray -> {
+        val raw = value.toString()
+        if (raw.contains(normalized, ignoreCase = true)) PersonRecord(mapOf("data" to raw)) else null
+    }
+    value.isJsonPrimitive -> jsonPrimitiveToRecord(value, normalized)
+    else -> null
+}
+
+private fun jsonObjectToRecord(value: JsonObject, normalized: String): PersonRecord? {
     val fields = linkedMapOf<String, String>()
-    val keys = value.keys()
-    while (keys.hasNext()) {
-        val key = keys.next()
-        val fieldValue = value.opt(key)
-        if (fieldValue == null || fieldValue == JSONObject.NULL) continue
-        fields[key] = when (fieldValue) {
-            is JSONArray, is JSONObject -> fieldValue.toString()
+    for ((key, fieldValue) in value.entrySet()) {
+        if (fieldValue.isJsonNull) continue
+        fields[key] = when {
+            fieldValue.isJsonObject || fieldValue.isJsonArray -> fieldValue.toString()
+            fieldValue.isJsonPrimitive -> fieldValue.asJsonPrimitive.asString
             else -> fieldValue.toString()
         }
     }
     return if (fields.values.any { it.contains(normalized, ignoreCase = true) }) PersonRecord(fields) else null
+}
+
+private fun jsonPrimitiveToRecord(value: JsonElement, normalized: String): PersonRecord? {
+    val raw = value.asString
+    return if (raw.contains(normalized, ignoreCase = true)) PersonRecord(mapOf("data" to raw)) else null
 }
 
 private fun detectDelimiter(header: String): Char? {
