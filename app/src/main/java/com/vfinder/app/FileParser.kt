@@ -16,8 +16,8 @@ internal fun parseInputStream(input: InputStream, fileName: String, query: Strin
 }
 
 internal fun parseText(text: String, fileName: String, query: String): List<PersonRecord> {
-    val normalized = query.trim().lowercase(Locale.getDefault())
-    if (normalized.isBlank() || text.isBlank()) return emptyList()
+    val normalized = query.trim().lowercase(Locale.ROOT)
+    if (text.isBlank()) return emptyList()
 
     val trimmed = text.trimStart()
     if (fileName.substringAfterLast('.', "").equals("json", true) || trimmed.startsWith("{") || trimmed.startsWith("[")) {
@@ -37,11 +37,11 @@ internal fun parseText(text: String, fileName: String, query: String): List<Pers
             val fields = headers.mapIndexedNotNull { index, header ->
                 cells.getOrNull(index)?.let { header to cleanCell(it) }
             }.toMap()
-            if (fields.values.any { it.contains(normalized, ignoreCase = true) }) PersonRecord(fields) else null
+            if (normalized.isBlank() || fields.values.any { it.contains(normalized, ignoreCase = true) }) PersonRecord(fields) else null
         }
     }
 
-    return lines.filter { it.contains(normalized, ignoreCase = true) }
+    return lines.filter { normalized.isBlank() || it.contains(normalized, ignoreCase = true) }
         .map { PersonRecord(linkedMapOf("data" to it.trim())) }
 }
 
@@ -74,7 +74,7 @@ private fun jsonElementToRecord(value: JsonElement, normalized: String): PersonR
     value.isJsonObject -> jsonObjectToRecord(value.asJsonObject, normalized)
     value.isJsonArray -> {
         val raw = value.toString()
-        if (raw.contains(normalized, ignoreCase = true)) PersonRecord(mapOf("data" to raw)) else null
+        if (normalized.isBlank() || raw.contains(normalized, ignoreCase = true)) PersonRecord(mapOf("data" to raw)) else null
     }
     value.isJsonPrimitive -> jsonPrimitiveToRecord(value, normalized)
     else -> null
@@ -90,12 +90,12 @@ private fun jsonObjectToRecord(value: JsonObject, normalized: String): PersonRec
             else -> fieldValue.toString()
         }
     }
-    return if (fields.values.any { it.contains(normalized, ignoreCase = true) }) PersonRecord(fields) else null
+    return if (normalized.isBlank() || fields.values.any { it.contains(normalized, ignoreCase = true) }) PersonRecord(fields) else null
 }
 
 private fun jsonPrimitiveToRecord(value: JsonElement, normalized: String): PersonRecord? {
     val raw = value.asString
-    return if (raw.contains(normalized, ignoreCase = true)) PersonRecord(mapOf("data" to raw)) else null
+    return if (normalized.isBlank() || raw.contains(normalized, ignoreCase = true)) PersonRecord(mapOf("data" to raw)) else null
 }
 
 private fun detectDelimiter(header: String): Char? {
