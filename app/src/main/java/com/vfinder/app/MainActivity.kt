@@ -1,6 +1,5 @@
 package com.vfinder.app
 
-import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -10,7 +9,6 @@ import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,10 +25,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
@@ -40,7 +36,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,7 +47,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -93,8 +88,8 @@ fun VFinderApp() {
         uri ?: return@rememberLauncherForActivityResult
         fileUri = uri
         fileName = uri.lastPathSegment?.substringAfterLast('/') ?: "Selected file"
-        rows = emptyList(); searched = false
-        contentResolverFor(uri)?.let { /* trigger via selected URI */ }
+        rows = emptyList()
+        searched = false
     }
 
     MaterialTheme(colorScheme = if (dark) darkColorScheme(primary = Indigo) else lightColorScheme(primary = Indigo)) {
@@ -104,14 +99,14 @@ fun VFinderApp() {
             Scaffold(containerColor = if (dark) BgDark else BgLight) { pad ->
                 LazyColumn(modifier = Modifier.fillMaxSize().padding(pad).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     item { TopBar(dark) { dark = !dark } }
+                    item { BrandHeader() }
                     item {
-                        BrandHeader()
+                        FilePickerCard(fileName) {
+                            launcher.launch(arrayOf("text/*", "application/json", "text/csv", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                        }
                     }
                     item {
-                        FilePickerCard(fileName) { launcher.launch(arrayOf("text/*", "application/json", "text/csv", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) }
-                    }
-                    item {
-                        SearchPanel(query) { query = it } {
+                        SearchPanel(query, { query = it }) {
                             val uri = fileUri
                             if (uri == null || query.text.isBlank()) return@SearchPanel
                             loading = true
@@ -152,7 +147,7 @@ private fun BrandHeader() {
 private fun LogoMark() {
     Box(modifier = Modifier.size(58.dp).clip(RoundedCornerShape(20.dp)).background(Brush.linearGradient(listOf(Navy, Indigo)))) {
         Icon(Icons.Default.Search, null, tint = Cyan, modifier = Modifier.align(Alignment.Center).size(34.dp))
-        Box(modifier = Modifier.size(10.dp).background(Color.White, CircleShape).align(Alignment.TopEnd).padding(2.dp))
+        Box(modifier = Modifier.size(10.dp).background(Color.White, CircleShape).align(Alignment.TopEnd))
     }
 }
 
@@ -259,10 +254,8 @@ private fun LoadingScreen(dark: Boolean) {
     }
 }
 
-private fun ComponentActivity.contentResolverFor(uri: Uri) = contentResolver.openInputStream(uri)
-
 private fun parseFile(uri: Uri, query: String): List<PersonRecord> {
-    val stream = contentResolverFor(uri) ?: return emptyList()
+    val stream = currentContentResolver?.openInputStream(uri) ?: return emptyList()
     stream.use { input ->
         val text = BufferedReader(InputStreamReader(input)).readText()
         if (text.isBlank()) return emptyList()
@@ -270,7 +263,7 @@ private fun parseFile(uri: Uri, query: String): List<PersonRecord> {
         val firstLine = text.lineSequence().firstOrNull().orEmpty()
         val delimiter = if (firstLine.contains('\t')) '\t' else if (firstLine.contains(';')) ';' else ','
         val lines = text.lines().filter { it.isNotBlank() }
-        if (lines.size >= 2 && (firstLine.contains(delimiter))) {
+        if (lines.size >= 2 && firstLine.contains(delimiter)) {
             val headers = splitLine(firstLine, delimiter)
             return lines.drop(1).mapNotNull { line ->
                 val cells = splitLine(line, delimiter)
@@ -285,3 +278,5 @@ private fun parseFile(uri: Uri, query: String): List<PersonRecord> {
 }
 
 private fun splitLine(line: String, delimiter: Char): List<String> = line.split(delimiter).map { it.trim() }
+
+private var currentContentResolver: android.content.ContentResolver? = null
