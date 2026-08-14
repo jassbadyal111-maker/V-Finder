@@ -86,7 +86,7 @@ private val DarkBg = Color(0xFF090D18)
 private val LightScheme = lightColorScheme(primary=Indigo,onPrimary=Color.White,background=LightBg,surface=Color.White,surfaceVariant=Color(0xFFE9ECF5),onBackground=Color(0xFF111522),onSurface=Color(0xFF111522),onSurfaceVariant=Color(0xFF626A7A))
 private val DarkScheme = darkColorScheme(primary=Color(0xFFA49CFF),onPrimary=Color(0xFF1B1745),background=DarkBg,surface=Color(0xFF111827),surfaceVariant=Color(0xFF1B2435),onBackground=Color(0xFFF3F5FA),onSurface=Color(0xFFF3F5FA),onSurfaceVariant=Color(0xFFAEB7C8))
 
-data class PersonRecord(val fields: LinkedHashMap<String,String>)
+data class PersonRecord(val fields: Map<String,String>)
 private fun personName(r: PersonRecord): String { val accepted=setOf("name","full name","person name","customer name","member name"); return r.fields.entries.firstOrNull{(k,v)->v.isNotBlank() && k.lowercase(Locale.ROOT).replace('_',' ').replace('-',' ').trim() in accepted}?.value?.trim().orEmpty() }
 private fun normalize(v:String)=v.trim().lowercase(Locale.ROOT).replace(Regex("\\s+")," ")
 
