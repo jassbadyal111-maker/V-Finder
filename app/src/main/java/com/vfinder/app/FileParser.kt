@@ -2,9 +2,9 @@ package com.vfinder.app
 
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
-import java.io.BufferedReader
 import java.nio.charset.StandardCharsets
 import java.util.Locale
 
@@ -48,9 +48,7 @@ private fun parseJson(text: String, normalized: String): List<PersonRecord> {
         when {
             root.startsWith("[") -> {
                 val array = JSONArray(text)
-                (0 until array.length()).mapNotNull { index ->
-                    jsonValueToRecord(array.get(index), normalized)
-                }
+                (0 until array.length()).mapNotNull { index -> jsonValueToRecord(array.get(index), normalized) }
             }
             root.startsWith("{") -> {
                 val objectRoot = JSONObject(text)
@@ -119,4 +117,4 @@ private fun splitDelimitedLine(line: String, delimiter: Char): List<String> {
     return result
 }
 
-private fun cleanCell(value: String): String = value.trim().trim('"').replace(""""""", """)
+private fun cleanCell(value: String): String = value.trim().trim('"')
