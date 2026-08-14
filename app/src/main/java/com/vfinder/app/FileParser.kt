@@ -8,122 +8,124 @@ import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
+import java.util.LinkedHashMap
 import java.util.Locale
 
-internal fun parseInputStream(input: InputStream, fileName: String, query: String): List<PersonRecord> {
+internal fun parseInputStream(input: InputStream, fileName: String): List<PersonRecord> {
     val text = BufferedReader(InputStreamReader(input, StandardCharsets.UTF_8)).readText()
-    return parseText(text, fileName, query)
+    return parseText(text, fileName)
 }
 
-internal fun parseText(text: String, fileName: String, query: String): List<PersonRecord> {
-    val normalized = query.trim().lowercase(Locale.ROOT)
+internal fun parseText(text: String, fileName: String): List<PersonRecord> {
     if (text.isBlank()) return emptyList()
-
     val trimmed = text.trimStart()
-    if (fileName.substringAfterLast('.', "").equals("json", true) || trimmed.startsWith("{") || trimmed.startsWith("[")) {
-        return parseJson(text, normalized)
+    return if (fileName.substringAfterLast('.', "").equals("json", true) || trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        parseJson(text)
+    } else {
+        parseDelimitedOrText(text)
     }
+}
 
+private fun parseDelimitedOrText(text: String): List<PersonRecord> {
     val lines = text.lineSequence().filter { it.isNotBlank() }.toList()
     if (lines.isEmpty()) return emptyList()
 
     val delimiter = detectDelimiter(lines.first())
     if (delimiter != null && lines.size >= 2) {
         val headers = splitDelimitedLine(lines.first(), delimiter).mapIndexed { index, header ->
-            header.trim().trim('"').ifBlank { "Column ${index + 1}" }
+            cleanCell(header).ifBlank { "Column ${index + 1}" }
         }
-        return lines.drop(1).mapNotNull { line ->
+        return lines.drop(1).map { line ->
             val cells = splitDelimitedLine(line, delimiter)
-            val fields = headers.mapIndexedNotNull { index, header ->
-                cells.getOrNull(index)?.let { header to cleanCell(it) }
-            }.toMap()
-            if (normalized.isBlank() || fields.values.any { it.contains(normalized, ignoreCase = true) }) PersonRecord(fields) else null
+            val fields = LinkedHashMap<String, String>()
+            headers.forEachIndexed { index, header ->
+                fields[header] = cells.getOrNull(index)?.let(::cleanCell).orEmpty()
+            }
+            PersonRecord(fields)
         }
     }
 
-    return lines.filter { normalized.isBlank() || it.contains(normalized, ignoreCase = true) }
-        .map { PersonRecord(linkedMapOf("data" to it.trim())) }
+    return lines.map { line ->
+        val fields = parseKeyValueLine(line)
+        if (fields.isNotEmpty()) PersonRecord(fields) else PersonRecord(linkedMapOf("Data" to line.trim()))
+    }
 }
 
-private fun parseJson(text: String, normalized: String): List<PersonRecord> {
+private fun parseKeyValueLine(line: String): LinkedHashMap<String, String> {
+    val fields = LinkedHashMap<String, String>()
+    val parts = line.split(Regex("\\s*[|;]\\s*"))
+    for (part in parts) {
+        val separator = part.indexOf(':').takeIf { it > 0 } ?: part.indexOf('=').takeIf { it > 0 } ?: continue
+        val key = part.substring(0, separator).trim()
+        val value = part.substring(separator + 1).trim()
+        if (key.isNotBlank() && value.isNotBlank()) fields[key] = value
+    }
+    return fields
+}
+
+private fun parseJson(text: String): List<PersonRecord> {
     return try {
         val root = JsonParser.parseString(text)
         when {
-            root.isJsonArray -> parseJsonArray(root.asJsonArray, normalized)
+            root.isJsonArray -> parseJsonArray(root.asJsonArray)
             root.isJsonObject -> {
-                val rootObject = root.asJsonObject
-                val data = rootObject.get("data")
-                if (data != null && data.isJsonArray) {
-                    parseJsonArray(data.asJsonArray, normalized)
-                } else {
-                    jsonObjectToRecord(rootObject, normalized)?.let(::listOf).orEmpty()
+                val object = root.asJsonObject
+                val data = object.entrySet().firstOrNull { it.key.equals("data", true) }?.value
+                when {
+                    data?.isJsonArray == true -> parseJsonArray(data.asJsonArray)
+                    else -> listOf(jsonObjectToRecord(object))
                 }
             }
-            root.isJsonPrimitive -> jsonPrimitiveToRecord(root, normalized)?.let(::listOf).orEmpty()
+            root.isJsonPrimitive -> listOf(PersonRecord(linkedMapOf("Data" to root.asString)))
             else -> emptyList()
         }
-    } catch (error: Exception) {
-        throw IllegalArgumentException("Invalid JSON file: ${error.message ?: "malformed JSON"}", error)
+    } catch (e: Exception) {
+        throw IllegalArgumentException("Invalid JSON file: ${e.message ?: "malformed JSON"}", e)
     }
 }
 
-private fun parseJsonArray(array: JsonArray, normalized: String): List<PersonRecord> =
-    array.mapNotNull { value -> jsonElementToRecord(value, normalized) }
-
-private fun jsonElementToRecord(value: JsonElement, normalized: String): PersonRecord? = when {
-    value.isJsonObject -> jsonObjectToRecord(value.asJsonObject, normalized)
-    value.isJsonArray -> {
-        val raw = value.toString()
-        if (normalized.isBlank() || raw.contains(normalized, ignoreCase = true)) PersonRecord(mapOf("data" to raw)) else null
+private fun parseJsonArray(array: JsonArray): List<PersonRecord> = array.mapNotNull { element ->
+    when {
+        element.isJsonObject -> jsonObjectToRecord(element.asJsonObject)
+        element.isJsonPrimitive -> PersonRecord(linkedMapOf("Data" to element.asString))
+        else -> null
     }
-    value.isJsonPrimitive -> jsonPrimitiveToRecord(value, normalized)
-    else -> null
 }
 
-private fun jsonObjectToRecord(value: JsonObject, normalized: String): PersonRecord? {
-    val fields = linkedMapOf<String, String>()
-    for ((key, fieldValue) in value.entrySet()) {
-        if (fieldValue.isJsonNull) continue
-        fields[key] = when {
-            fieldValue.isJsonObject || fieldValue.isJsonArray -> fieldValue.toString()
-            fieldValue.isJsonPrimitive -> fieldValue.asJsonPrimitive.asString
-            else -> fieldValue.toString()
+private fun jsonObjectToRecord(object: JsonObject): PersonRecord {
+    val fields = LinkedHashMap<String, String>()
+    object.entrySet().forEach { (key, value) ->
+        if (!value.isJsonNull) {
+            fields[key] = when {
+                value.isJsonObject || value.isJsonArray -> value.toString()
+                value.isJsonPrimitive -> value.asJsonPrimitive.asString
+                else -> value.toString()
+            }
         }
     }
-    return if (normalized.isBlank() || fields.values.any { it.contains(normalized, ignoreCase = true) }) PersonRecord(fields) else null
-}
-
-private fun jsonPrimitiveToRecord(value: JsonElement, normalized: String): PersonRecord? {
-    val raw = value.asString
-    return if (normalized.isBlank() || raw.contains(normalized, ignoreCase = true)) PersonRecord(mapOf("data" to raw)) else null
+    return PersonRecord(fields)
 }
 
 private fun detectDelimiter(header: String): Char? {
-    val candidates = listOf('\t', ',', ';')
-    return candidates.maxByOrNull { delimiter -> splitDelimitedLine(header, delimiter).size }
+    val candidates = listOf(',', '\t', ';')
+    return candidates.maxByOrNull { splitDelimitedLine(header, it).size }
         ?.takeIf { splitDelimitedLine(header, it).size > 1 }
 }
 
 private fun splitDelimitedLine(line: String, delimiter: Char): List<String> {
     val result = mutableListOf<String>()
     val current = StringBuilder()
-    var inQuotes = false
-    var index = 0
-    while (index < line.length) {
-        val char = line[index]
+    var quoted = false
+    var i = 0
+    while (i < line.length) {
+        val c = line[i]
         when {
-            char == '"' && inQuotes && index + 1 < line.length && line[index + 1] == '"' -> {
-                current.append('"')
-                index++
-            }
-            char == '"' -> inQuotes = !inQuotes
-            char == delimiter && !inQuotes -> {
-                result += current.toString()
-                current.clear()
-            }
-            else -> current.append(char)
+            c == '"' && quoted && i + 1 < line.length && line[i + 1] == '"' -> { current.append('"'); i++ }
+            c == '"' -> quoted = !quoted
+            c == delimiter && !quoted -> { result += current.toString(); current.clear() }
+            else -> current.append(c)
         }
-        index++
+        i++
     }
     result += current.toString()
     return result
