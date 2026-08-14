@@ -25,6 +25,15 @@ class FileParserTest {
     }
 
     @Test
+    fun blankQueryLoadsAllRecordsForSuggestions() {
+        val text = "full_name,city\nJass Badyal,Delhi\nAman,Jaipur\n"
+        val result = parseText(text, "people.csv", "")
+
+        assertEquals(2, result.size)
+        assertEquals("Jass Badyal", result.first().name)
+    }
+
+    @Test
     fun jsonArraySearchWorks() {
         val text = "[{\"name\":\"Jass\",\"city\":\"Delhi\"},{\"name\":\"Aman\",\"city\":\"Jaipur\"}]"
         val result = parseText(text, "people.json", "jass")
