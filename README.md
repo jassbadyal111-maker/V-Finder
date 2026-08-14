@@ -12,7 +12,7 @@ The first release supports delimiter-separated text data such as CSV/TSV/TXT. Ea
 
 ## Build with GitHub Actions
 
-Push to `main` or manually run **Build V-Finder APK** from the Actions tab. The workflow builds `app-debug.apk` and uploads it as the `V-Finder-debug` artifact.
+Push to `main` or manually run **Build V-Finder APK** from the Actions tab. CI uses Gradle 8.10.2 directly (so a missing local Gradle wrapper cannot break the build), then uploads `app-debug.apk` as the `V-Finder-debug` artifact.
 
 ## Run locally
 
