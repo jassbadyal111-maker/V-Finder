@@ -134,7 +134,8 @@ fun VFinderApp() {
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
     val drawerState = rememberDrawerState(DrawerValue.Closed)
-    var dark by rememberSaveable { mutableStateOf(isSystemInDarkTheme()) }
+    val systemDark = isSystemInDarkTheme()
+    var dark by rememberSaveable { mutableStateOf(systemDark) }
     var fileName by rememberSaveable { mutableStateOf("No file selected") }
     var fileUri by remember { mutableStateOf<Uri?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -356,26 +357,13 @@ private fun SearchPanel(query: String, onQuery: (String) -> Unit, suggestions: L
             Text("Find a person", fontSize = 19.sp, fontWeight = FontWeight.Bold)
             Text("Type a name to see matching suggestions", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
-            OutlinedTextField(
-                value = query,
-                onValueChange = onQuery,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = enabled && !searching,
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                placeholder = { Text("e.g. Jass, Aman, Simran") },
-                label = { Text("Person name") },
-                shape = RoundedCornerShape(18.dp)
-            )
+            OutlinedTextField(value = query, onValueChange = onQuery, modifier = Modifier.fillMaxWidth(), enabled = enabled && !searching, singleLine = true, leadingIcon = { Icon(Icons.Default.Search, null) }, placeholder = { Text("e.g. Jass, Aman, Simran") }, label = { Text("Person name") }, shape = RoundedCornerShape(18.dp))
             if (suggestions.isNotEmpty()) {
                 Spacer(Modifier.height(6.dp))
                 Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                     Column(Modifier.padding(vertical = 4.dp)) {
                         suggestions.forEach { suggestion ->
-                            Row(
-                                Modifier.fillMaxWidth().clickable { onSuggestion(suggestion) }.padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                            Row(Modifier.fillMaxWidth().clickable { onSuggestion(suggestion) }.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(34.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha = .12f)), contentAlignment = Alignment.Center) {
                                     Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(19.dp))
                                 }
@@ -430,7 +418,7 @@ private fun PersonCard(record: PersonRecord) {
                 Spacer(Modifier.width(13.dp))
                 Column(Modifier.weight(1f)) {
                     Text(name, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("PERSON INFORMATION", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 1.sp)
+                    Text("PERSON INFORMATION", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 }
             }
             Spacer(Modifier.height(15.dp))
