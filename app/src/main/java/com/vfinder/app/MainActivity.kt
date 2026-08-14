@@ -50,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -84,6 +85,7 @@ fun VFinderApp() {
     var loading by remember { mutableStateOf(false) }
     var rows by remember { mutableStateOf(emptyList<PersonRecord>()) }
     var searched by remember { mutableStateOf(false) }
+    val resolver = LocalContext.current.contentResolver
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
         fileUri = uri
@@ -94,7 +96,7 @@ fun VFinderApp() {
 
     MaterialTheme(colorScheme = if (dark) darkColorScheme(primary = Indigo) else lightColorScheme(primary = Indigo)) {
         if (loading) {
-            LoadingScreen(dark)
+            LoadingScreen()
         } else {
             Scaffold(containerColor = if (dark) BgDark else BgLight) { pad ->
                 LazyColumn(modifier = Modifier.fillMaxSize().padding(pad).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -110,20 +112,16 @@ fun VFinderApp() {
                             val uri = fileUri
                             if (uri == null || query.text.isBlank()) return@SearchPanel
                             loading = true
-                            rows = runCatching { parseFile(uri, query.text) }.getOrDefault(emptyList())
+                            rows = runCatching { parseFile(resolver, uri, query.text) }.getOrDefault(emptyList())
                             searched = true
                             loading = false
                         }
                     }
                     item {
-                        AnimatedVisibility(visible = searched) {
-                            ResultSummary(rows.size, query.text)
-                        }
+                        AnimatedVisibility(visible = searched) { ResultSummary(rows.size, query.text) }
                     }
                     items(rows) { PersonCard(it) }
-                    if (searched && rows.isEmpty()) {
-                        item { EmptyState(query.text) }
-                    }
+                    if (searched && rows.isEmpty()) item { EmptyState(query.text) }
                     item { Spacer(Modifier.height(24.dp)) }
                 }
             }
@@ -134,8 +132,7 @@ fun VFinderApp() {
 @Composable
 private fun BrandHeader() {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        LogoMark()
-        Spacer(Modifier.width(12.dp))
+        LogoMark(); Spacer(Modifier.width(12.dp))
         Column {
             Text("V-Finder", fontSize = 30.sp, fontWeight = FontWeight.ExtraBold)
             Text("Find Anyone. Anywhere. Instantly.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -195,8 +192,7 @@ private fun SearchPanel(value: TextFieldValue, onValue: (TextFieldValue) -> Unit
 private fun ResultSummary(count: Int, query: String) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Text("$count match(es) found", color = Color(0xFF16894F), fontWeight = FontWeight.Bold)
-        Spacer(Modifier.weight(1f))
-        Text(query, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+        Spacer(Modifier.weight(1f)); Text(query, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
     }
 }
 
@@ -230,32 +226,28 @@ private fun EmptyState(query: String) {
     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.fillMaxWidth().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Default.Tune, null, tint = Indigo, modifier = Modifier.size(42.dp))
-            Spacer(Modifier.height(8.dp))
-            Text("No match found", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Spacer(Modifier.height(8.dp)); Text("No match found", fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Text("No record matched “$query”. Try a different spelling.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
 @Composable
-private fun LoadingScreen(dark: Boolean) {
+private fun LoadingScreen() {
     val progress by animateFloatAsState(1f, label = "loading")
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Navy, Color(0xFF29146C)))), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            LogoMark()
-            Spacer(Modifier.height(18.dp))
+            LogoMark(); Spacer(Modifier.height(18.dp))
             Text("V-Finder", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
             Text("Find Anyone. Anywhere. Instantly.", color = Color.White.copy(alpha = .8f))
-            Spacer(Modifier.height(28.dp))
-            CircularProgressIndicator(progress = { progress }, color = Cyan)
-            Spacer(Modifier.height(10.dp))
-            Text("Loading…", color = Color.White.copy(alpha = .85f))
+            Spacer(Modifier.height(28.dp)); CircularProgressIndicator(progress = { progress }, color = Cyan)
+            Spacer(Modifier.height(10.dp)); Text("Loading…", color = Color.White.copy(alpha = .85f))
         }
     }
 }
 
-private fun parseFile(uri: Uri, query: String): List<PersonRecord> {
-    val stream = currentContentResolver?.openInputStream(uri) ?: return emptyList()
+private fun parseFile(resolver: android.content.ContentResolver, uri: Uri, query: String): List<PersonRecord> {
+    val stream = resolver.openInputStream(uri) ?: return emptyList()
     stream.use { input ->
         val text = BufferedReader(InputStreamReader(input)).readText()
         if (text.isBlank()) return emptyList()
@@ -271,12 +263,8 @@ private fun parseFile(uri: Uri, query: String): List<PersonRecord> {
                 if (fields.values.any { it.lowercase(Locale.getDefault()).contains(normalized) }) PersonRecord(fields) else null
             }
         }
-        return lines.filter { it.lowercase(Locale.getDefault()).contains(normalized) }.map { line ->
-            PersonRecord(mapOf("data" to line))
-        }
+        return lines.filter { it.lowercase(Locale.getDefault()).contains(normalized) }.map { line -> PersonRecord(mapOf("data" to line)) }
     }
 }
 
 private fun splitLine(line: String, delimiter: Char): List<String> = line.split(delimiter).map { it.trim() }
-
-private var currentContentResolver: android.content.ContentResolver? = null
