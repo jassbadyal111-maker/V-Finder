@@ -1,7 +1,6 @@
 package com.vfinder.app
 
 import com.google.gson.JsonArray
-import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import java.io.BufferedReader
@@ -9,7 +8,6 @@ import java.io.InputStream
 import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
 import java.util.LinkedHashMap
-import java.util.Locale
 
 internal fun parseInputStream(input: InputStream, fileName: String): List<PersonRecord> {
     val text = BufferedReader(InputStreamReader(input, StandardCharsets.UTF_8)).readText()
@@ -19,32 +17,22 @@ internal fun parseInputStream(input: InputStream, fileName: String): List<Person
 internal fun parseText(text: String, fileName: String): List<PersonRecord> {
     if (text.isBlank()) return emptyList()
     val trimmed = text.trimStart()
-    return if (fileName.substringAfterLast('.', "").equals("json", true) || trimmed.startsWith("{") || trimmed.startsWith("[")) {
-        parseJson(text)
-    } else {
-        parseDelimitedOrText(text)
-    }
+    return if (fileName.substringAfterLast('.', "").equals("json", true) || trimmed.startsWith("{") || trimmed.startsWith("[")) parseJson(text) else parseDelimitedOrText(text)
 }
 
 private fun parseDelimitedOrText(text: String): List<PersonRecord> {
     val lines = text.lineSequence().filter { it.isNotBlank() }.toList()
     if (lines.isEmpty()) return emptyList()
-
     val delimiter = detectDelimiter(lines.first())
     if (delimiter != null && lines.size >= 2) {
-        val headers = splitDelimitedLine(lines.first(), delimiter).mapIndexed { index, header ->
-            cleanCell(header).ifBlank { "Column ${index + 1}" }
-        }
+        val headers = splitDelimitedLine(lines.first(), delimiter).mapIndexed { index, header -> cleanCell(header).ifBlank { "Column ${index + 1}" } }
         return lines.drop(1).map { line ->
             val cells = splitDelimitedLine(line, delimiter)
             val fields = LinkedHashMap<String, String>()
-            headers.forEachIndexed { index, header ->
-                fields[header] = cells.getOrNull(index)?.let(::cleanCell).orEmpty()
-            }
+            headers.forEachIndexed { index, header -> fields[header] = cells.getOrNull(index)?.let(::cleanCell).orEmpty() }
             PersonRecord(fields)
         }
     }
-
     return lines.map { line ->
         val fields = parseKeyValueLine(line)
         if (fields.isNotEmpty()) PersonRecord(fields) else PersonRecord(linkedMapOf("Data" to line.trim()))
@@ -53,8 +41,7 @@ private fun parseDelimitedOrText(text: String): List<PersonRecord> {
 
 private fun parseKeyValueLine(line: String): LinkedHashMap<String, String> {
     val fields = LinkedHashMap<String, String>()
-    val parts = line.split(Regex("\\s*[|;]\\s*"))
-    for (part in parts) {
+    for (part in line.split(Regex("\\s*[|;]\\s*"))) {
         val separator = part.indexOf(':').takeIf { it > 0 } ?: part.indexOf('=').takeIf { it > 0 } ?: continue
         val key = part.substring(0, separator).trim()
         val value = part.substring(separator + 1).trim()
@@ -69,12 +56,9 @@ private fun parseJson(text: String): List<PersonRecord> {
         when {
             root.isJsonArray -> parseJsonArray(root.asJsonArray)
             root.isJsonObject -> {
-                val object = root.asJsonObject
-                val data = object.entrySet().firstOrNull { it.key.equals("data", true) }?.value
-                when {
-                    data?.isJsonArray == true -> parseJsonArray(data.asJsonArray)
-                    else -> listOf(jsonObjectToRecord(object))
-                }
+                val jsonObject = root.asJsonObject
+                val data = jsonObject.entrySet().firstOrNull { it.key.equals("data", true) }?.value
+                if (data?.isJsonArray == true) parseJsonArray(data.asJsonArray) else listOf(jsonObjectToRecord(jsonObject))
             }
             root.isJsonPrimitive -> listOf(PersonRecord(linkedMapOf("Data" to root.asString)))
             else -> emptyList()
@@ -92,9 +76,9 @@ private fun parseJsonArray(array: JsonArray): List<PersonRecord> = array.mapNotN
     }
 }
 
-private fun jsonObjectToRecord(object: JsonObject): PersonRecord {
+private fun jsonObjectToRecord(jsonObject: JsonObject): PersonRecord {
     val fields = LinkedHashMap<String, String>()
-    object.entrySet().forEach { (key, value) ->
+    jsonObject.entrySet().forEach { (key, value) ->
         if (!value.isJsonNull) {
             fields[key] = when {
                 value.isJsonObject || value.isJsonArray -> value.toString()
@@ -108,8 +92,7 @@ private fun jsonObjectToRecord(object: JsonObject): PersonRecord {
 
 private fun detectDelimiter(header: String): Char? {
     val candidates = listOf(',', '\t', ';')
-    return candidates.maxByOrNull { splitDelimitedLine(header, it).size }
-        ?.takeIf { splitDelimitedLine(header, it).size > 1 }
+    return candidates.maxByOrNull { splitDelimitedLine(header, it).size }?.takeIf { splitDelimitedLine(header, it).size > 1 }
 }
 
 private fun splitDelimitedLine(line: String, delimiter: Char): List<String> {
