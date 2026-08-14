@@ -1,0 +1,11 @@
+# Android Studio
+.gradle/
+.idea/
+*.iml
+build/
+local.properties
+
+# Generated
+captures/
+.externalNativeBuild/
+.cxx/
