@@ -10,7 +10,7 @@ class FileParserTest {
         val text = "name,phone,city\nJass,9999999999,Delhi\nAman,8888888888,Jaipur\n"
         val result = parseText(text, "people.csv")
         assertEquals(2, result.size)
-        assertEquals("Jass", result[0].name)
+        assertEquals("Jass", result[0].fields["name"])
     }
 
     @Test
@@ -25,7 +25,7 @@ class FileParserTest {
     fun nameFieldDoesNotUseFatherName() {
         val text = "name,father_name,city\nAman Kumar,Rajesh Kumar,Rohtak\n"
         val result = parseText(text, "people.csv")
-        assertEquals("Aman Kumar", result.first().name)
+        assertEquals("Aman Kumar", result.first().fields["name"])
     }
 
     @Test
@@ -33,14 +33,14 @@ class FileParserTest {
         val text = "[{\"name\":\"Jass\",\"city\":\"Delhi\"},{\"name\":\"Aman\",\"city\":\"Jaipur\"}]"
         val result = parseText(text, "people.json")
         assertEquals(2, result.size)
-        assertEquals("Aman", result[1].name)
+        assertEquals("Aman", result[1].fields["name"])
     }
 
     @Test
     fun keyValueTextCanExposeName() {
         val text = "Name: Jass Badyal | Father Name: Rajesh | City: Delhi\n"
         val result = parseText(text, "people.txt")
-        assertEquals("Jass Badyal", result.first().name)
+        assertEquals("Jass Badyal", result.first().fields["Name"])
         assertTrue(result.first().fields["Father Name"].orEmpty().contains("Rajesh"))
     }
 }
