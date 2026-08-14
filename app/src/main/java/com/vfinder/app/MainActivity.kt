@@ -117,8 +117,9 @@ private fun VFinderApp() {
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val systemDarkTheme = isSystemInDarkTheme()
 
-    var darkMode by rememberSaveable { mutableStateOf(isSystemInDarkTheme()) }
+    var darkMode by rememberSaveable { mutableStateOf(systemDarkTheme) }
     var query by rememberSaveable { mutableStateOf("") }
     var fileName by rememberSaveable { mutableStateOf("No file selected") }
     var records by remember { mutableStateOf(emptyList<PersonRecord>()) }
