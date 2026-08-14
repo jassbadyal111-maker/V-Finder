@@ -6,48 +6,41 @@ import org.junit.Test
 
 class FileParserTest {
     @Test
-    fun csvSearchMatchesAcrossFields() {
+    fun csvLoadsAllRecords() {
         val text = "name,phone,city\nJass,9999999999,Delhi\nAman,8888888888,Jaipur\n"
-        val result = parseText(text, "people.csv", "jass")
-
-        assertEquals(1, result.size)
-        assertEquals("Jass", result.first().fields["name"])
-        assertEquals("Delhi", result.first().fields["city"])
+        val result = parseText(text, "people.csv")
+        assertEquals(2, result.size)
+        assertEquals("Jass", result[0].name)
     }
 
     @Test
     fun quotedCsvValuesKeepCommas() {
         val text = "name,address\nJass,\"Sector 1, Chandigarh\"\n"
-        val result = parseText(text, "people.csv", "chandigarh")
-
+        val result = parseText(text, "people.csv")
         assertEquals(1, result.size)
         assertEquals("Sector 1, Chandigarh", result.first().fields["address"])
     }
 
     @Test
-    fun blankQueryLoadsAllRecordsForSuggestions() {
-        val text = "full_name,city\nJass Badyal,Delhi\nAman,Jaipur\n"
-        val result = parseText(text, "people.csv", "")
-
-        assertEquals(2, result.size)
-        assertEquals("Jass Badyal", result.first().name)
+    fun nameFieldDoesNotUseFatherName() {
+        val text = "name,father_name,city\nAman Kumar,Rajesh Kumar,Rohtak\n"
+        val result = parseText(text, "people.csv")
+        assertEquals("Aman Kumar", result.first().name)
     }
 
     @Test
-    fun jsonArraySearchWorks() {
+    fun jsonArrayLoadsAllRecords() {
         val text = "[{\"name\":\"Jass\",\"city\":\"Delhi\"},{\"name\":\"Aman\",\"city\":\"Jaipur\"}]"
-        val result = parseText(text, "people.json", "jass")
-
-        assertEquals(1, result.size)
-        assertEquals("Jass", result.first().fields["name"])
+        val result = parseText(text, "people.json")
+        assertEquals(2, result.size)
+        assertEquals("Aman", result[1].name)
     }
 
     @Test
-    fun plainTextSearchWorks() {
-        val text = "Jass - Delhi\nAman - Jaipur\n"
-        val result = parseText(text, "people.txt", "jass")
-
-        assertEquals(1, result.size)
-        assertTrue(result.first().fields["data"].orEmpty().contains("Jass"))
+    fun keyValueTextCanExposeName() {
+        val text = "Name: Jass Badyal | Father Name: Rajesh | City: Delhi\n"
+        val result = parseText(text, "people.txt")
+        assertEquals("Jass Badyal", result.first().name)
+        assertTrue(result.first().fields["Father Name"].orEmpty().contains("Rajesh"))
     }
 }
